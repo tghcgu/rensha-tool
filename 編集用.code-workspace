@@ -1,0 +1,12 @@
+{
+  "folders": [
+    {
+      "name": "右+左 連射ツール",
+      "path": "."
+    }
+  ],
+  "settings": {
+    "files.encoding": "utf8",
+    "python.defaultInterpreterPath": "py"
+  }
+}
