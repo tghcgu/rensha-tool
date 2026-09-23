@@ -10,8 +10,9 @@
 
 - 右クリック + 左クリックを押している間だけ連射
 - どちらかを離すと即停止
+- 放置連射モード(手を離しても連射し続ける。クリックかEscで即解除)
 - 連射速度を画面から調整可能
-- Pythonなしで動く配布用exe付き
+- Pythonなしで動くexeをGitHub Releasesで配布
 - 外部サービスや常駐インストール不要
 
 ## 必要環境
@@ -22,29 +23,47 @@
 
 ## 起動
 
-通常はこのファイルを開きます。
+exeはGitHubのReleasesから入手します。
 
-```text
-配布用\右+左 連射ツール.exe
-```
+1. [Releases](https://github.com/tghcgu/rensha-tool/releases) を開きます。
+2. 最新版の `右+左 連射ツール.exe` をダウンロードします。
+3. ダウンロードしたexeをダブルクリックします。
 
-エクスプローラーで `配布用` フォルダを開き、`右+左 連射ツール.exe` をダブルクリックしてください。
+初回はWindowsの「PCが保護されました」(SmartScreen)が出ることがあります。その場合は「詳細情報」→「実行」を選んでください。
+
+自分でビルドした場合は `配布用\右+左 連射ツール.exe` にできます(「exeを作り直す」を参照)。
 
 ## 使い方
 
-1. `配布用\右+左 連射ツール.exe` を開きます。
+1. `右+左 連射ツール.exe` を開きます。
 2. 必要なら「連射速度」を調整します。
 3. 対象画面に移動します。
 4. 右クリックを押したまま左クリックします。
 5. 左クリックか右クリックを離すと連射が止まります。
 
+## 放置連射
+
+手を離したまま連射し続けたい場合に使います。
+
+1. 「放置連射を開始」ボタンを押します。
+2. 3秒のカウントダウンの間に、対象へカーソルを移動します。
+3. カウントが終わると、手を離していても設定した速度で連射し続けます。
+
+カウント終了時にマウスボタンや Esc を押したままだと、「放置連射 準備」と表示され、離した時点で開始します。
+
+解除はどれでも即時にできます。
+
+- マウスの左か右をクリックする
+- Esc キーを押す
+- アプリの「放置連射を解除」ボタンを押す
+- アプリを終了する
+
 ## 配布
 
-配布するファイルは基本的にこれ1つです。
+配布するのはexe 1つだけです。exeはリポジトリに含めず、GitHub Releasesに添付して配布します。
 
-```text
-配布用\右+左 連射ツール.exe
-```
+1. 「exeを作り直す」の手順で `配布用\右+左 連射ツール.exe` を作ります。
+2. GitHubのReleasesで新しいリリースを作り、そのexeを添付します。
 
 相手のPCにPythonは必要ありません。
 
@@ -54,9 +73,10 @@
 rensha-tool
 ├─ README.md
 ├─ README.en.md
-├─ rensha_tool.py
+├─ rensha_tool.pyw
 ├─ .gitignore
-└─ 配布用
+├─ .gitattributes
+└─ 配布用                  ビルドで作られる(Git管理外)
    └─ 右+左 連射ツール.exe
 ```
 
@@ -65,8 +85,10 @@ rensha-tool
 開発中にPythonで直接起動する場合は、プロジェクトフォルダで次を実行します。
 
 ```powershell
-py rensha_tool.py
+py rensha_tool.pyw
 ```
+
+エクスプローラーで `rensha_tool.pyw` をダブルクリックしても起動できます。`.pyw` はコンソールなしで実行されるため、黒いコマンド画面は出ません。
 
 ## exeを作り直す
 
@@ -74,29 +96,33 @@ PyInstallerを使ってexeを作り直します。
 
 ```powershell
 py -m pip install --user pyinstaller
-py -m PyInstaller --noconfirm --clean --onefile --windowed --name "右+左 連射ツール" --distpath ".\配布用" --workpath ".\build" --specpath ".\build" .\rensha_tool.py
+py -m PyInstaller --noconfirm --clean --onefile --windowed --name "右+左 連射ツール" --distpath ".\配布用" --workpath ".\build" --specpath ".\build" .\rensha_tool.pyw
 ```
 
-作成後、`配布用\右+左 連射ツール.exe` が更新されます。
+作成後、`配布用\右+左 連射ツール.exe` ができます。`配布用` と `build` はGit管理外です。
 
 ## 動作確認
 
 ソースコードの構文チェック:
 
 ```powershell
-py -m py_compile .\rensha_tool.py
+py -m py_compile .\rensha_tool.pyw
 ```
 
 exeの自己チェック:
 
 ```powershell
-.\配布用\右+左 連射ツール.exe --self-test
+$p = Start-Process ".\配布用\右+左 連射ツール.exe" -ArgumentList "--self-test" -Wait -PassThru
+$p.ExitCode
 ```
+
+`0` なら正常、`1` なら異常です。exeはウィンドウアプリなので、`.\配布用\右+左 連射ツール.exe --self-test` と直接実行するとPowerShellは終了を待たず、結果も表示されません。コマンドプロンプトやGit Bashから実行した場合は `OK` と表示されます。
 
 ## 注意
 
 - Windows専用です。
 - 右クリック自体も対象アプリに届きます。
+- 本物のクリックとツールが送ったクリックを区別するため、起動中は低レベルマウスフックを使います(インストールや常駐はしません)。セキュリティソフトやアンチチートが検出することがあります。
 - 管理者権限で動いているアプリに対して入力が届かない場合は、ツール側も管理者として起動する必要があることがあります。
 - 使用先のルールや規約に従ってください。
 - ゲームやサービスの規約回避、アンチチート回避を目的とした使い方は想定していません。
