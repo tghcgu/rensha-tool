@@ -33,9 +33,9 @@ WM_RBUTTONUP = 0x0205
 # clicks exactly like physical ones.
 RENSHA_SIGNATURE = 0x52454E53  # "RENS"
 
-# How long the async key state may still carry our own injected click. Used
-# only where no hook is available, so a stale reading cannot be mistaken for
-# the user pressing a button.
+# How long the async key state may still carry our own injected click: it is
+# updated after SendInput has already returned. Readings taken inside this
+# window are not trusted as the user's own state.
 INJECTION_GRACE = 0.03
 
 MIN_CPS = 1
@@ -95,12 +95,35 @@ class WindowsMouse:
             ctypes.c_int,
         ]
         self.user32.SendInput.restype = ctypes.c_uint
+        self.user32.GetCursorPos.argtypes = [ctypes.POINTER(wintypes.POINT)]
+        self.user32.GetCursorPos.restype = wintypes.BOOL
+        self.user32.WindowFromPoint.argtypes = [wintypes.POINT]
+        self.user32.WindowFromPoint.restype = wintypes.HWND
+        self.user32.GetWindowThreadProcessId.argtypes = [
+            wintypes.HWND,
+            ctypes.POINTER(wintypes.DWORD),
+        ]
+        self.user32.GetWindowThreadProcessId.restype = wintypes.DWORD
+        self._process_id = self.kernel32.GetCurrentProcessId()
 
         # True while an injected left press may still be held by the system.
         self._left_latched_by_us = False
 
     def is_pressed(self, virtual_key: int) -> bool:
         return bool(self.user32.GetAsyncKeyState(virtual_key) & 0x8000)
+
+    def cursor_over_own_window(self) -> bool:
+        # Compares the owning process rather than window handles, so every
+        # window of this app counts (title bar included) however Tk wraps it.
+        point = wintypes.POINT()
+        if not self.user32.GetCursorPos(ctypes.byref(point)):
+            return False
+        window = self.user32.WindowFromPoint(point)
+        if not window:
+            return False
+        process_id = wintypes.DWORD()
+        self.user32.GetWindowThreadProcessId(window, ctypes.byref(process_id))
+        return process_id.value == self._process_id
 
     def _send(self, *flags: int) -> None:
         # Events in one SendInput call are inserted into the input stream
@@ -143,6 +166,10 @@ class WindowsMouse:
     def left_latched_by_us(self) -> bool:
         return self._left_latched_by_us
 
+    def forget_left_latch(self) -> None:
+        # Called once the system shows the button up: nothing of ours is held.
+        self._left_latched_by_us = False
+
     def release_left(self) -> None:
         if not self._left_latched_by_us:
             return
@@ -158,8 +185,11 @@ class PhysicalButtons:
     skipped; anything else counts as the user, so input forwarded by remote
     desktop or mouse software still works.
 
+    press_count() counts the user's left/right presses, so two readings taken
+    apart show whether a click happened in between, however short it was.
+
     If the hook cannot be installed, available() stays False and callers fall
-    back to the async key state.
+    back to the async key state; resync() then keeps press_count() going.
     """
 
     def __init__(self, mouse: WindowsMouse) -> None:
@@ -197,6 +227,7 @@ class PhysicalButtons:
         # Nothing has been injected yet, so the key state is the user's own.
         self._left = mouse.is_pressed(VK_LBUTTON)
         self._right = mouse.is_pressed(VK_RBUTTON)
+        self._presses = 0
         self._hook: int | None = None
         self._thread_id = 0
         self._ready = threading.Event()
@@ -214,13 +245,15 @@ class PhysicalButtons:
     def left_down(self) -> bool:
         return self._left
 
-    def right_down(self) -> bool:
-        return self._right
+    def press_count(self) -> int:
+        return self._presses
 
     def resync(self, left: bool, right: bool) -> None:
         # Called only when nothing of ours is outstanding, so these values are
         # the user's real state. Keeps the tracked state from drifting if
         # Windows ever drops the hook for being slow to answer.
+        if (left and not self._left) or (right and not self._right):
+            self._presses += 1
         self._left = left
         self._right = right
 
@@ -253,10 +286,12 @@ class PhysicalButtons:
             if info.dwExtraInfo != RENSHA_SIGNATURE:
                 if message == WM_LBUTTONDOWN:
                     self._left = True
+                    self._presses += 1
                 elif message == WM_LBUTTONUP:
                     self._left = False
                 elif message == WM_RBUTTONDOWN:
                     self._right = True
+                    self._presses += 1
                 elif message == WM_RBUTTONUP:
                     self._right = False
         return self._user32.CallNextHookEx(None, code, message, data)
@@ -289,6 +324,7 @@ class RapidClicker:
         self._afk = False
         self._afk_armed = False
         self._afk_cancels = 0
+        self._paused = False
         self._last_injection_at = 0.0
         self._last_error: str | None = None
 
@@ -328,7 +364,8 @@ class RapidClicker:
 
     def start_afk(self) -> None:
         # Armed only once the user has let go of everything, so a button still
-        # held when the countdown ends cannot cancel AFK mode instantly.
+        # held when the countdown ends, or the click that cut it short, cannot
+        # cancel AFK mode on the spot.
         self._afk_armed = False
         self._afk = True
 
@@ -344,37 +381,50 @@ class RapidClicker:
     def afk_cancel_count(self) -> int:
         return self._afk_cancels
 
+    def afk_paused(self) -> bool:
+        return self._paused
+
     def _snapshot(self) -> ButtonSnapshot:
         latched_left = self._mouse.is_pressed(VK_LBUTTON)
+        # Right is never injected, so its key state is always the user's own.
         right = self._mouse.is_pressed(VK_RBUTTON)
-        settled = not self._mouse.left_latched_by_us() and (
-            time.perf_counter() - self._last_injection_at >= INJECTION_GRACE
-        )
+        quiet = time.perf_counter() - self._last_injection_at >= INJECTION_GRACE
 
-        if settled:
+        if quiet and not latched_left:
+            # The system shows the button up, so no press of ours is held.
+            self._mouse.forget_left_latch()
+
+        if quiet and not self._mouse.left_latched_by_us():
+            # Nothing of ours is outstanding, so the key state is the user's
+            # own: a good moment to correct hook state we may have missed.
             self._buttons.resync(latched_left, right)
             return ButtonSnapshot(latched_left, right, latched_left)
 
         if self._buttons.available():
-            # An injected press is outstanding, so only the hook knows whether
-            # the user is still holding the button.
+            # An injected press may be outstanding, so only the hook knows
+            # whether the user is still holding the button.
             return ButtonSnapshot(
                 self._buttons.left_down() and latched_left,
-                self._buttons.right_down() and right,
+                right,
                 latched_left,
             )
 
         return ButtonSnapshot(latched_left, right, latched_left)
 
-    def _afk_cancel_pressed(self, snapshot: ButtonSnapshot) -> bool:
-        if self._mouse.is_pressed(VK_ESCAPE):
-            return True
+    def _mouse_held(self, snapshot: ButtonSnapshot) -> bool:
         if not self._buttons.available():
             # Without the hook the key state may still carry our own click;
             # trust it only once that has settled.
             if time.perf_counter() - self._last_injection_at < INJECTION_GRACE:
                 return False
         return snapshot.left or snapshot.right
+
+    def _afk_cancel_requested(self, snapshot: ButtonSnapshot, over_own_window: bool) -> bool:
+        if self._mouse.is_pressed(VK_ESCAPE):
+            return True
+        # A click on this app's own window is the user working its controls,
+        # the stop button above all, and that button does the cancelling.
+        return not over_own_window and self._mouse_held(snapshot)
 
     def _release_left_if_free(self, snapshot: ButtonSnapshot) -> None:
         # A pulse ends pressed. If the user's finger is already off the button
@@ -395,31 +445,31 @@ class RapidClicker:
         while not self._stop_event.is_set():
             settings = self.settings()
             snapshot = self._snapshot()
-
             afk = self._afk and settings.enabled
+            trigger = settings.enabled and snapshot.left and snapshot.right
+            over_own_window = (afk or trigger) and self._mouse.cursor_over_own_window()
+
             if afk and not self._afk_armed:
-                if self._afk_cancel_pressed(snapshot):
-                    self._active = False
-                    self._release_left_if_free(snapshot)
-                    time.sleep(0.02)
-                    continue
-                self._afk_armed = True
-            elif afk and self._afk_cancel_pressed(snapshot):
+                if self._mouse.is_pressed(VK_ESCAPE) or self._mouse_held(snapshot):
+                    afk = trigger = False
+                else:
+                    self._afk_armed = True
+            elif afk and self._afk_cancel_requested(snapshot, over_own_window):
                 self._afk = False
                 self._afk_cancels += 1
                 afk = False
 
-            if afk:
-                pulse = self._mouse.left_click_once
-            else:
-                pulse = self._mouse.left_click_pulse
-                if not (settings.enabled and snapshot.left and snapshot.right):
-                    self._active = False
-                    next_pulse_at = 0.0
-                    self._release_left_if_free(snapshot)
-                    time.sleep(0.012)
-                    continue
+            # Never click into this app's own window: that is where the user
+            # goes to change settings or press the stop button.
+            self._paused = afk and over_own_window
+            if over_own_window or not (afk or trigger):
+                self._active = False
+                next_pulse_at = 0.0
+                self._release_left_if_free(snapshot)
+                time.sleep(0.012)
+                continue
 
+            pulse = self._mouse.left_click_once if afk else self._mouse.left_click_pulse
             self._active = True
             now = time.perf_counter()
             if now < next_pulse_at:
@@ -455,8 +505,6 @@ class RenshaApp(tk.Tk):
 
     def _setup(self, mouse: WindowsMouse) -> None:
         self.title(APP_NAME)
-        self.geometry("430x480")
-        self.minsize(390, 440)
         self.configure(bg="#f5f7fb")
 
         self.mouse = mouse
@@ -466,6 +514,7 @@ class RenshaApp(tk.Tk):
 
         self._shown_status: tuple | None = None
         self._afk_countdown = 0
+        self._countdown_presses = 0
         self._afk_after_id: str | None = None
         self._refresh_after_id: str | None = None
         self._seen_afk_cancels = 0
@@ -486,6 +535,7 @@ class RenshaApp(tk.Tk):
         self._build_style()
         self._build_ui()
         self._bind_events()
+        self._fit_window_to_content()
         if not hook_ready:
             self._show_notice(
                 "入力フックが使えません。放置連射の解除は Esc かボタンをお使いください。",
@@ -615,6 +665,18 @@ class RenshaApp(tk.Tk):
 
         ttk.Button(card, text="終了", command=self._close).pack(fill="x")
 
+    def _fit_window_to_content(self) -> None:
+        # Size the window from what it holds, measured with a two-line hint,
+        # so longer messages never push the bottom buttons out of view. A
+        # fixed pixel size cuts them off as soon as the text grows.
+        self.hint_var.set("\n")
+        self.update_idletasks()
+        width = self.winfo_reqwidth()
+        height = self.winfo_reqheight()
+        self.hint_var.set("")
+        self.minsize(width, height)
+        self.geometry(f"{max(width, 430)}x{height}")
+
     def _bind_events(self) -> None:
         self.protocol("WM_DELETE_WINDOW", self._close)
         self.enabled_var.trace_add("write", lambda *_: self._enabled_changed())
@@ -629,7 +691,10 @@ class RenshaApp(tk.Tk):
         self._update_status()
 
     def _afk_button_clicked(self) -> None:
-        if self._afk_countdown > 0 or self.clicker.afk_active():
+        if self._afk_countdown > 0:
+            self._stop_afk()
+            self._show_notice("放置連射の開始を中止しました。")
+        elif self.clicker.afk_active():
             self._stop_afk()
             self._show_notice("放置連射を解除しました。")
         else:
@@ -638,18 +703,36 @@ class RenshaApp(tk.Tk):
 
     def _begin_afk_countdown(self) -> None:
         self._afk_countdown = 3
+        self._countdown_presses = self.buttons.press_count()
         self._afk_after_id = self.after(1000, self._afk_tick)
 
     def _afk_tick(self) -> None:
         self._afk_after_id = None
         self._afk_countdown -= 1
         if self._afk_countdown <= 0:
-            self._afk_countdown = 0
-            self.clicker.start_afk()
-            self._seen_afk_cancels = self.clicker.afk_cancel_count()
+            self._start_afk_now()
         else:
             self._afk_after_id = self.after(1000, self._afk_tick)
         self._update_status()
+
+    def _skip_countdown_on_click(self) -> None:
+        if self._afk_countdown <= 0:
+            return
+        presses = self.buttons.press_count()
+        if presses == self._countdown_presses:
+            return
+        self._countdown_presses = presses
+        # A click on this window is the user working its controls (the stop
+        # button above all), so only a click elsewhere starts right away.
+        if not self.mouse.cursor_over_own_window():
+            self._start_afk_now()
+
+    def _start_afk_now(self) -> None:
+        if self._afk_after_id is not None:
+            self.after_cancel(self._afk_after_id)
+            self._afk_after_id = None
+        self._afk_countdown = 0
+        self.clicker.start_afk()
 
     def _stop_afk(self) -> None:
         if self._afk_after_id is not None:
@@ -709,6 +792,7 @@ class RenshaApp(tk.Tk):
         counting = self._afk_countdown > 0
         afk = enabled and self.clicker.afk_active()
         arming = afk and not self.clicker.afk_armed()
+        paused = afk and self.clicker.afk_paused()
         active = enabled and self.clicker.is_active()
         notice = self._current_notice()
         error = self.clicker.last_error()
@@ -718,10 +802,13 @@ class RenshaApp(tk.Tk):
             hint = "チェックを入れると右+左で連射できます"
         elif counting:
             status = f"開始まで {self._afk_countdown}"
-            hint = "対象にカーソルを合わせてください(ボタンで中止)"
+            hint = "対象にカーソルを合わせてください。対象をクリックするとすぐ開始します(ボタンで中止)"
         elif arming:
             status = "放置連射 準備"
             hint = "マウスボタンと Esc を離すと開始します"
+        elif paused:
+            status = "一時停止(放置)"
+            hint = "このウィンドウの上ではクリックしません"
         elif afk:
             status = "連射中(放置)"
             hint = "どこかをクリックするか Esc キーで解除"
@@ -780,6 +867,7 @@ class RenshaApp(tk.Tk):
             self._seen_afk_cancels = cancels
             self._show_notice("放置連射を解除しました(クリックまたは Esc)")
 
+        self._skip_countdown_on_click()
         self._update_status()
         self._refresh_after_id = self.after(50, self._refresh_ui)
 

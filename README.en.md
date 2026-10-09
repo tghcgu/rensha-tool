@@ -46,14 +46,16 @@ If you built it yourself, it is at `配布用\右+左 連射ツール.exe` (see 
 Use this when you want the clicking to continue hands-free.
 
 1. Press the "放置連射を開始" (start AFK clicking) button.
-2. During the 3-second countdown, move the cursor to the target.
+2. During the 3-second countdown, move the cursor to the target. Clicking the target starts right away instead of waiting out the countdown.
 3. After the countdown, clicking continues at the configured speed with no buttons held.
 
-If a mouse button or Esc is still held when the countdown ends, the app shows "放置連射 準備" (getting ready) and starts as soon as you let go.
+If a mouse button or Esc is still held when the countdown ends, or right after the click that cut it short, the app shows "放置連射 準備" (getting ready) and starts as soon as you let go. Clicking this app's own window during the countdown does not cut it short, so the cancel button stays usable.
+
+While the cursor is over this app's own window, nothing is clicked and the app shows "一時停止(放置)" (paused). You can change settings or press the stop button without the clicking getting in the way. Clicking resumes once the cursor leaves the window.
 
 Any of these cancels it instantly:
 
-- Click either mouse button
+- Click either mouse button outside this app's window
 - Press the Esc key
 - Press the "放置連射を解除" (stop) button in the app
 - Close the app
@@ -74,6 +76,8 @@ rensha-tool
 ├─ README.md
 ├─ README.en.md
 ├─ rensha_tool.pyw
+├─ tests
+│  └─ test_rensha.py      automated tests
 ├─ .gitignore
 ├─ .gitattributes
 └─ 配布用                  created by the build (not tracked by Git)
@@ -109,6 +113,14 @@ Python syntax check:
 py -m py_compile .\rensha_tool.pyw
 ```
 
+Automated tests (no real clicks are sent; the cursor is nudged and put back, and a test window flashes up briefly):
+
+```powershell
+py tests\test_rensha.py
+```
+
+It ends with a line such as `61/61 passed` and exit code `0` when everything passes.
+
 Executable self-test:
 
 ```powershell
@@ -122,6 +134,7 @@ $p.ExitCode
 
 - Windows only.
 - The physical right-click input is still passed through to the target app.
+- Nothing is clicked into this app's own window, in either right + left mode or AFK mode.
 - While running, the tool uses a low-level mouse hook to tell your real clicks from the ones it sends. Nothing is installed and nothing keeps running after exit. Security software or anti-cheat systems may flag it.
 - If the target app is running as administrator and does not receive input, the clicker may also need to be run as administrator.
 - Follow the rules and terms of the app or service where you use it.
