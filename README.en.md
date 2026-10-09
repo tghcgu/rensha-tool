@@ -75,6 +75,8 @@ The recipient does not need Python installed.
 rensha-tool
 ├─ README.md
 ├─ README.en.md
+├─ HANDOFF.md              development handoff notes (Japanese)
+├─ CLAUDE.md               instructions for Claude Code
 ├─ rensha_tool.pyw
 ├─ tests
 │  └─ test_rensha.py      automated tests
@@ -85,6 +87,8 @@ rensha-tool
 ```
 
 ## Run From Source
+
+If you are taking over development, read [HANDOFF.md](HANDOFF.md) first (Japanese). It covers the current state, how to set up a new PC, and the remaining work.
 
 From the project folder:
 

@@ -75,6 +75,8 @@ exeはGitHubのReleasesから入手します。
 rensha-tool
 ├─ README.md
 ├─ README.en.md
+├─ HANDOFF.md              開発の引き継ぎメモ
+├─ CLAUDE.md               Claude Code 用の指示
 ├─ rensha_tool.pyw
 ├─ tests
 │  └─ test_rensha.py      自動テスト
@@ -85,6 +87,8 @@ rensha-tool
 ```
 
 ## ソースから実行
+
+開発を引き継ぐ場合は、先に [HANDOFF.md](HANDOFF.md) を読んでください。今の状態、新しいPCでの環境の作り直し方、残っている作業をまとめてあります。
 
 開発中にPythonで直接起動する場合は、プロジェクトフォルダで次を実行します。
 
