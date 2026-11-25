@@ -2,7 +2,7 @@
 
 PCが壊れたり担当が変わったりしても、ここから作業を再開できるようにするための記録です。ツールの使い方は [README.md](README.md) にあります。このファイルには、今の状態、環境の作り直し方、壊しやすい箇所、これまでの決定をまとめます。
 
-最終更新: 2026-10-09
+最終更新: 2026-11-25
 
 ## 1. 今の状態
 
@@ -14,8 +14,17 @@ PCが壊れたり担当が変わったりしても、ここから作業を再開
 
 | ブランチ | 中身 |
 |---|---|
-| `main` | 最新版です。2026-10-09 に `fix-input-detection` をマージしました。 |
-| `fix-input-detection` | `main` にマージ済みで、中身は `main` と同じです。今後は使わないので、削除してもかまいません。 |
+| `main` | 最新版です。2026-11-25 に `release-v1.0.0` をマージしました。 |
+| `release-v1.0.0` | v1.0.0 を公開したときの作業ブランチです。`main` にマージ済みなので、削除してもかまいません。 |
+| `fix-input-detection` | `main` にマージ済みです。今後は使わないので、削除してもかまいません。 |
+
+### リリース
+
+配布ページ: https://github.com/tghcgu/rensha-tool/releases
+
+| バージョン | 日付 | 内容 |
+|---|---|---|
+| `v1.0.0` | 2026-11-25 | 最初の公開版。`rensha-tool.exe` を添付(Python 3.13.17 と PyInstaller 6.22.3 でビルド) |
 
 2026-09-24 以降の主なコミット:
 
@@ -35,33 +44,36 @@ PCが壊れたり担当が変わったりしても、ここから作業を再開
 - 左ボタンが押されたまま取り残されるのを防ぐ
 - 速度の UI(スライダーと入力欄を整数で同期、1〜60 回/秒)
 - 自動テスト 61 件(`tests/test_rensha.py`)
+- GitHub Releases で exe を公開(v1.0.0)。受け取った人は Python なしで使えます
 
 ### 残っている作業
 
-1. **GitHub Releases に exe を載せる。** リリースはまだ1つもありません。README の入手手順はリリースがある前提で書いてあります。
-   1. 「4. exe のビルド」の手順で `配布用\右+左 連射ツール.exe` を作ります。
-   2. https://github.com/tghcgu/rensha-tool/releases/new でタグ(例: `v1.0.0`)を作り、その exe を添付して公開します。
+1. **実際のマウスで動作を確認する。** 物理クリックは自動テストで再現できません。「6. 手動確認チェックリスト」を参照してください。
 
-2. **実際のマウスで動作を確認する。** 物理クリックは自動テストで再現できません。「6. 手動確認チェックリスト」を参照してください。
-
-3. (任意)過去のコミットに約11MBの exe が2つ残っています。リポジトリを軽くするには履歴の書き換えが必要です。公開済みの履歴を書き換えることになるので、やる場合は慎重に判断してください。
+2. (任意)過去のコミットに約11MBの exe が2つ残っています。リポジトリを軽くするには履歴の書き換えが必要です。公開済みの履歴を書き換えることになるので、やる場合は慎重に判断してください。
 
 ## 2. 新しいPCで作業を再開する
 
-### 確認済みの環境(2026-10-09)
+### 確認済みの環境(2026-11-25)
 
 | もの | バージョン |
 |---|---|
 | Windows | 11 Home |
-| Python | 3.13.7(python.org 版、py ランチャー付き、Tk 8.6) |
-| PyInstaller | 6.20.0(exe を作るときだけ必要) |
-| Git | 2.53.0 |
+| Python | 3.13.17(python.org 版、py ランチャー付き、Tk 8.6) |
+| PyInstaller | 6.22.3(exe を作るときだけ必要) |
+| Git | 2.56.0 |
+| GitHub CLI(`gh`) | 2.105.0(リリースを作るときだけ必要) |
 
 Python の標準ライブラリ(ctypes と tkinter)だけで動きます。追加でインストールするライブラリはありません。
 
 ### 手順
 
-1. python.org から Python 3.13 をインストールします。インストーラーで「py launcher」と「tcl/tk and IDLE」を有効にしてください(tkinter が必要です)。
+1. Python 3.13 をインストールします。python.org のインストーラーを使う場合は「py launcher」と「tcl/tk and IDLE」を有効にしてください(tkinter が必要です)。winget なら次の1行で、管理者権限なしで入ります。
+
+   ```powershell
+   winget install --id Python.Python.3.13 -e --override "/quiet InstallAllUsers=0 InstallLauncherAllUsers=0 Include_launcher=1 Include_tcltk=1 AssociateFiles=1 PrependPath=0"
+   ```
+
 2. Git をインストールします。
 3. リポジトリを取得します。
 
@@ -97,19 +109,33 @@ Python の標準ライブラリ(ctypes と tkinter)だけで動きます。追�
 
 ```powershell
 py -m pip install --user pyinstaller
-py -m PyInstaller --noconfirm --clean --onefile --windowed --name "右+左 連射ツール" --distpath ".\配布用" --workpath ".\build" --specpath ".\build" .\rensha_tool.pyw
+py -m PyInstaller --noconfirm --clean --onefile --windowed --name "rensha-tool" --distpath ".\配布用" --workpath ".\build" --specpath ".\build" .\rensha_tool.pyw
 ```
+
+`配布用\rensha-tool.exe` ができます。画面のタイトルは「右+左 連射ツール」のままです。
 
 できた exe を確認します。
 
 ```powershell
-$p = Start-Process ".\配布用\右+左 連射ツール.exe" -ArgumentList "--self-test" -Wait -PassThru
+$p = Start-Process ".\配布用\rensha-tool.exe" -ArgumentList "--self-test" -Wait -PassThru
 $p.ExitCode   # 0 なら正常
 ```
 
 exe はウィンドウアプリなので、PowerShell で直接 `--self-test` を付けて実行すると、終了を待たず結果も出ません。必ず上の形で確認してください。自己チェックでは、入力 API が使えることとマウスフックが入ることを確かめます。
 
 exe には署名がないので、ダウンロードした人の PC では SmartScreen の警告が出ます(README に対処を書いてあります)。
+
+### GitHub Releases で公開する
+
+```powershell
+winget install --id GitHub.cli -e --scope user   # 初回だけ。管理者権限なしで入ります
+gh auth login --web                              # 初回だけ。表示されたコードをブラウザで入力して承認します
+gh release create v1.0.1 ".\配布用\rensha-tool.exe" --target main --title "v1.0.1" --notes-file <説明文のファイル>
+```
+
+- バージョンは公開のたびに上げます(v1.0.0 は公開済み)。
+- exe の名前は英数字にしてください。GitHub Releases は日本語のファイル名を使えず、`右+左 連射ツール.exe` を添付すると `+.exe` に変えられました(2026-11-25 に確認)。
+- 先に `--draft` を付けて下書きで作ると、公開前に添付ファイルの名前や説明文を確認できます。確認できたら `gh release edit <タグ> --draft=false` で公開します。
 
 ## 5. 仕組みと、変更するときに壊しやすい所
 
@@ -204,6 +230,8 @@ py tests\test_rensha.py
 | 2026-10-09 | ウィンドウの大きさを中身から決める | 「終了」ボタンが表示されていなかった |
 | 2026-10-09 | 引き継ぎ用に HANDOFF.md と CLAUDE.md を追加し、作業ブランチを GitHub に push | PCが壊れても引き継げるようにしたいという要望 |
 | 2026-10-09 | `fix-input-detection` を `main` にマージして push | 最新版と引き継ぎメモを、GitHub で最初に表示される `main` に載せるため(ユーザーの指示) |
+| 2026-11-25 | v1.0.0 を GitHub Releases で公開 | 誰でも Python なしで使えるようにしたいという要望。配り方はユーザーが「GitHub で公開する」を選択 |
+| 2026-11-25 | exe の名前を `rensha-tool.exe` に変更 | GitHub Releases に `右+左 連射ツール.exe` を添付すると `+.exe` に変えられたため。画面のタイトルは変えていない |
 
 ## 9. 既知の注意点
 

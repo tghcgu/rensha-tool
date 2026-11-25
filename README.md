@@ -26,16 +26,16 @@
 exeはGitHubのReleasesから入手します。
 
 1. [Releases](https://github.com/tghcgu/rensha-tool/releases) を開きます。
-2. 最新版の `右+左 連射ツール.exe` をダウンロードします。
-3. ダウンロードしたexeをダブルクリックします。
+2. 最新版の「Assets」にある `rensha-tool.exe` をダウンロードします。
+3. ダウンロードしたexeをダブルクリックします。「右+左 連射ツール」の画面が開きます。
 
 初回はWindowsの「PCが保護されました」(SmartScreen)が出ることがあります。その場合は「詳細情報」→「実行」を選んでください。
 
-自分でビルドした場合は `配布用\右+左 連射ツール.exe` にできます(「exeを作り直す」を参照)。
+自分でビルドした場合は `配布用\rensha-tool.exe` にできます(「exeを作り直す」を参照)。
 
 ## 使い方
 
-1. `右+左 連射ツール.exe` を開きます。
+1. `rensha-tool.exe` を開きます。
 2. 必要なら「連射速度」を調整します。
 3. 対象画面に移動します。
 4. 右クリックを押したまま左クリックします。
@@ -64,10 +64,12 @@ exeはGitHubのReleasesから入手します。
 
 配布するのはexe 1つだけです。exeはリポジトリに含めず、GitHub Releasesに添付して配布します。
 
-1. 「exeを作り直す」の手順で `配布用\右+左 連射ツール.exe` を作ります。
+1. 「exeを作り直す」の手順で `配布用\rensha-tool.exe` を作ります。
 2. GitHubのReleasesで新しいリリースを作り、そのexeを添付します。
 
 相手のPCにPythonは必要ありません。
+
+exeの名前は英数字のままにしてください。GitHubのReleasesは日本語のファイル名を使えず、たとえば `右+左 連射ツール.exe` は `+.exe` に変えられてしまいます。
 
 ## フォルダ構成
 
@@ -83,7 +85,7 @@ rensha-tool
 ├─ .gitignore
 ├─ .gitattributes
 └─ 配布用                  ビルドで作られる(Git管理外)
-   └─ 右+左 連射ツール.exe
+   └─ rensha-tool.exe
 ```
 
 ## ソースから実行
@@ -104,10 +106,10 @@ PyInstallerを使ってexeを作り直します。
 
 ```powershell
 py -m pip install --user pyinstaller
-py -m PyInstaller --noconfirm --clean --onefile --windowed --name "右+左 連射ツール" --distpath ".\配布用" --workpath ".\build" --specpath ".\build" .\rensha_tool.pyw
+py -m PyInstaller --noconfirm --clean --onefile --windowed --name "rensha-tool" --distpath ".\配布用" --workpath ".\build" --specpath ".\build" .\rensha_tool.pyw
 ```
 
-作成後、`配布用\右+左 連射ツール.exe` ができます。`配布用` と `build` はGit管理外です。
+作成後、`配布用\rensha-tool.exe` ができます。`配布用` と `build` はGit管理外です。
 
 ## 動作確認
 
@@ -128,11 +130,11 @@ py tests\test_rensha.py
 exeの自己チェック:
 
 ```powershell
-$p = Start-Process ".\配布用\右+左 連射ツール.exe" -ArgumentList "--self-test" -Wait -PassThru
+$p = Start-Process ".\配布用\rensha-tool.exe" -ArgumentList "--self-test" -Wait -PassThru
 $p.ExitCode
 ```
 
-`0` なら正常、`1` なら異常です。exeはウィンドウアプリなので、`.\配布用\右+左 連射ツール.exe --self-test` と直接実行するとPowerShellは終了を待たず、結果も表示されません。コマンドプロンプトやGit Bashから実行した場合は `OK` と表示されます。
+`0` なら正常、`1` なら異常です。exeはウィンドウアプリなので、`.\配布用\rensha-tool.exe --self-test` と直接実行するとPowerShellは終了を待たず、結果も表示されません。コマンドプロンプトやGit Bashから実行した場合は `OK` と表示されます。
 
 ## 注意
 

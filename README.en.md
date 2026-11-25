@@ -26,16 +26,16 @@ The project avoids extra launcher shortcuts. The distributable executable is the
 Get the executable from GitHub Releases.
 
 1. Open [Releases](https://github.com/tghcgu/rensha-tool/releases).
-2. Download `右+左 連射ツール.exe` from the latest release.
-3. Double-click the downloaded executable.
+2. Download `rensha-tool.exe` from the "Assets" of the latest release.
+3. Double-click the downloaded executable. The "右+左 連射ツール" window opens.
 
 On first launch Windows may show "Windows protected your PC" (SmartScreen). Choose "More info" and then "Run anyway".
 
-If you built it yourself, it is at `配布用\右+左 連射ツール.exe` (see "Rebuild the Executable").
+If you built it yourself, it is at `配布用\rensha-tool.exe` (see "Rebuild the Executable").
 
 ## Usage
 
-1. Open `右+左 連射ツール.exe`.
+1. Open `rensha-tool.exe`.
 2. Adjust the rapid-click speed if needed.
 3. Switch to the target window.
 4. Hold right click, then hold left click.
@@ -64,10 +64,12 @@ Any of these cancels it instantly:
 
 Only the executable is distributed. It is not kept in the repository; attach it to a GitHub Release instead.
 
-1. Build `配布用\右+左 連射ツール.exe` as described in "Rebuild the Executable".
+1. Build `配布用\rensha-tool.exe` as described in "Rebuild the Executable".
 2. Create a new release on GitHub and attach that executable.
 
 The recipient does not need Python installed.
+
+Keep the executable name in ASCII. GitHub Releases cannot use Japanese file names: `右+左 連射ツール.exe`, for example, gets renamed to `+.exe`.
 
 ## Project Layout
 
@@ -83,7 +85,7 @@ rensha-tool
 ├─ .gitignore
 ├─ .gitattributes
 └─ 配布用                  created by the build (not tracked by Git)
-   └─ 右+左 連射ツール.exe
+   └─ rensha-tool.exe
 ```
 
 ## Run From Source
@@ -104,10 +106,10 @@ The executable is built with PyInstaller.
 
 ```powershell
 py -m pip install --user pyinstaller
-py -m PyInstaller --noconfirm --clean --onefile --windowed --name "右+左 連射ツール" --distpath ".\配布用" --workpath ".\build" --specpath ".\build" .\rensha_tool.pyw
+py -m PyInstaller --noconfirm --clean --onefile --windowed --name "rensha-tool" --distpath ".\配布用" --workpath ".\build" --specpath ".\build" .\rensha_tool.pyw
 ```
 
-After the build finishes, the executable is at `配布用\右+左 連射ツール.exe`. Both `配布用` and `build` are ignored by Git.
+After the build finishes, the executable is at `配布用\rensha-tool.exe`. Both `配布用` and `build` are ignored by Git.
 
 ## Checks
 
@@ -128,11 +130,11 @@ It ends with a line such as `61/61 passed` and exit code `0` when everything pas
 Executable self-test:
 
 ```powershell
-$p = Start-Process ".\配布用\右+左 連射ツール.exe" -ArgumentList "--self-test" -Wait -PassThru
+$p = Start-Process ".\配布用\rensha-tool.exe" -ArgumentList "--self-test" -Wait -PassThru
 $p.ExitCode
 ```
 
-`0` means OK and `1` means a failure. The executable is a windowed app, so running `.\配布用\右+左 連射ツール.exe --self-test` directly makes PowerShell return without waiting and shows nothing. From Command Prompt or Git Bash it prints `OK`.
+`0` means OK and `1` means a failure. The executable is a windowed app, so running `.\配布用\rensha-tool.exe --self-test` directly makes PowerShell return without waiting and shows nothing. From Command Prompt or Git Bash it prints `OK`.
 
 ## Notes
 
